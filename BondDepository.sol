@@ -642,6 +642,28 @@ interface IStakingHelper {
     function stake( uint _amount, address _recipient ) external;
 }
 
+interface IUniV2Pair {
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+}
+
+interface AggregatorV3Interface {
+
+  function decimals() external view returns (uint8);
+  function description() external view returns (string memory);
+  function version() external view returns (uint256);
+
+  function latestRoundData()
+    external
+    view
+    returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    );
+}
+
 contract StagBondDepository is Ownable {
 
     using FixedPoint for *;
@@ -684,7 +706,8 @@ contract StagBondDepository is Ownable {
     uint public totalDebt; // total value of outstanding bonds; used for pricing
     uint32 public lastDecay; // reference time for debt decay
 
-
+    IUniV2Pair ELP = IUniV2Pair(0x7Cb0703aa37601a02798BDFF63A18aF2dD082572);
+    AggregatorV3Interface priceFeed = AggregatorV3Interface(0xAB594600376Ec9fD91F8e885dADF0CE036862dE0);
 
 
     /* ======== STRUCTS ======== */
@@ -1027,7 +1050,8 @@ contract StagBondDepository is Ownable {
      *  @return price_ uint
      */
     function bondPrice() public view returns ( uint price_ ) {        
-        price_ = terms.controlVariable.mul( debtRatio() ).add( 1000000000 ).div( 1e7 );
+        //price_ = terms.controlVariable.mul( debtRatio() ).add( 1000000000 ).div( 1e7 );
+        price_ = _rawBondPrice();
         if ( price_ < terms.minimumPrice ) {
             price_ = terms.minimumPrice;
         }
@@ -1038,7 +1062,8 @@ contract StagBondDepository is Ownable {
      *  @return price_ uint
      */
     function _bondPrice() internal returns ( uint price_ ) {
-        price_ = terms.controlVariable.mul( debtRatio() ).add( 1000000000 ).div( 1e7 );
+        //price_ = terms.controlVariable.mul( debtRatio() ).add( 1000000000 ).div( 1e7 );
+        price_ = _rawBondPrice();
         if ( price_ < terms.minimumPrice ) {
             price_ = terms.minimumPrice;        
         } else if ( terms.minimumPrice != 0 ) {
@@ -1046,17 +1071,40 @@ contract StagBondDepository is Ownable {
         }
     }
 
+    function _rawBondPrice() internal view returns (uint) {
+        return terms.controlVariable.mul( debtRatio() ).div( 1e7 );
+    }
+
+    /**
+     *  @notice get asset price from chainlink
+     */
+    function assetPrice() public view returns (uint) {
+        ( , int price, , , ) = priceFeed.latestRoundData();     //Gets the price of matic
+        //We reserve 0 is matic , reserve 1 is elk
+        (uint reserve0, uint reserve1, ) = IUniV2Pair(ELP).getReserves();
+        uint elkPerMatic = reserve1.div(reserve0);
+        uint elkPrice = elkPerMatic.mul(uint(price));
+        return elkPrice;
+    }
+
     /**
      *  @notice converts bond price to DAI value
      *  @return price_ uint
      */
     function bondPriceInUSD() public view returns ( uint price_ ) {
+        price_ = bondPrice().mul( uint( assetPrice() ) ).mul( 1e8 );
+    }
+    /**
+     *  @notice converts bond price to DAI value
+     *  @return price_ uint
+     */
+    /*function bondPriceInUSD() public view returns ( uint price_ ) {
         if( isLiquidityBond ) {
             price_ = bondPrice().mul( IBondCalculator( bondCalculator ).markdown( principle ) ).div( 100 );
         } else {
             price_ = bondPrice().mul( 10 ** IERC20( principle ).decimals() ).div( 100 );
         }
-    }
+    }*/
 
 
     /**

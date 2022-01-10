@@ -313,8 +313,6 @@ contract StagTreasury is Ownable {
     constructor (
         address _Stag,
         address _Elk,
-        address _ElkStag,
-        address _bondCalculator,
         uint32 _secondsNeededForQueue
     ) {
         require( _Stag != address(0) );
@@ -323,9 +321,9 @@ contract StagTreasury is Ownable {
         isReserveToken[ _Elk ] = true;
         reserveTokens.push( _Elk );
 
-        isLiquidityToken[ _ElkStag ] = true;
+        /*isLiquidityToken[ _ElkStag ] = true;
         liquidityTokens.push( _ElkStag );
-        bondCalculator[_ElkStag] = _bondCalculator;
+        bondCalculator[_ElkStag] = _bondCalculator;*/
 
         secondsNeededForQueue = _secondsNeededForQueue;
     }
